@@ -3,26 +3,43 @@ title ABANG KARIPAP
 color 0A
 
 cls
-echo Installing requirements...
-python -m pip install -r requirements.txt
-echo.
-echo Starting Backend and Frontend...
+echo Starting ABANG KARIPAP...
 echo.
 
-:: Start Backend in new window
-start "Backend Server" cmd /c "cd backend && python -m uvicorn main:app --reload --port 8000"
+:: Check if node_modules exists
+if not exist "frontend\node_modules" (
+    echo Installing frontend dependencies...
+    cd frontend
+    call npm install
+    cd ..
+    echo.
+) else (
+    echo Frontend dependencies already installed
+)
 
-:: Wait 3 seconds for backend to initialize
-timeout /t 3 /nobreak >nul
+:: Install backend requirements
+echo Installing backend requirements...
+cd backend
+python -m pip install fastapi uvicorn python-dotenv requests pydantic python-multipart
+cd ..
 
-:: Start Frontend in new window
-start "Frontend Server" cmd /c "cd frontend && npm start"
+echo.
+echo Starting servers...
+echo.
+
+:: Start Backend
+start "Backend Server" cmd /k "cd backend && python -m uvicorn main:app --reload --port 8000"
+
+:: Wait
+timeout /t 3 >nul
+
+:: Start Frontend  
+start "Frontend Server" cmd /k "cd frontend && npm start"
 
 echo.
 echo Backend: http://localhost:8000
 echo Frontend: http://localhost:3000
 echo.
-echo Both servers are running!
-echo Close the server windows to stop.
+echo Servers started! Close the windows to stop.
 echo.
 pause
