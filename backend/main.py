@@ -1,217 +1,289 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from dotenv import load_dotenv
+import logging
+import time
 import base64
 import requests
 import json
-import logging
-from typing import Optional
+import os
 
-# 设置日志
+load_dotenv()
+
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+# Initialize FastAPI app
+app = FastAPI(title="Fake News Detector API", version="1.0.0")
 
-# CORS 设置
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 开发环境允许所有来源
-    allow_methods=["*"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 配置 API 密钥
-GOOGLE_VISION_KEY = "AIzaSyAR2r_C2jJFXH9fIOS8UUhbTvZw6gM0Adw"
-GEMINI_API_KEY = "AIzaSyAYEo4TmLluSKf8iTycM1JmW42ngVSCY5A"
+# Get API keys from environment variables
+GOOGLE_VISION_KEY = os.getenv("GOOGLE_VISION_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# 数据模型
-class TextNewsItem(BaseModel):
+# Check if API keys are loaded
+if not GOOGLE_VISION_KEY:
+    logger.warning("GOOGLE_VISION_KEY not found in environment variables")
+if not GEMINI_API_KEY:
+    logger.warning("GEMINI_API_KEY not found in environment variables")
+
+# Pydantic models
+class TextNewsRequest(BaseModel):
     text: str
-    input_type: str = "text"
 
-class ImageNewsItem(BaseModel):
+class ImageNewsRequest(BaseModel):
     image: str
-    input_type: str = "image"
 
+# SYSTEM STEP - 1:  DIAGNOSTIC ENDPOINTS 
+@app.get("/diagnose/gemini")
+async def diagnose_gemini():
+    """Check available Gemini models"""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
+    
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            models = response.json().get('models', [])
+            model_names = [m['name'].replace('models/', '') for m in models]
+            return {
+                "status": "success",
+                "available_models": model_names,
+                "recommended_model": "gemini-2.5-flash",
+                "message": "Use 'gemini-2.5-flash' in your API calls"
+            }
+        else:
+            return {"status": "error", "message": response.text}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# SCANNING METHODS: OCR FUNCTION (Only accept google vision currently for better accuracy and language support)
 def ocr_with_google_vision(image_base64):
-    """使用 Google Vision API 进行 OCR（修复 referer 问题）"""
+    """Use Google Vision API for OCR"""
     url = f"https://vision.googleapis.com/v1/images:annotate?key={GOOGLE_VISION_KEY}"
     
-    # 关键：添加 referer header 匹配你在 Google Cloud 中设置的域名
-    headers = {
-        'Content-Type': 'application/json',
-        'Referer': 'http://localhost:3000'  # 匹配你的前端地址
-    }
+    headers = {'Content-Type': 'application/json'}
     
     request_body = {
         "requests": [
             {
-                "image": {
-                    "content": image_base64
-                },
-                "features": [
-                    {
-                        "type": "TEXT_DETECTION"
-                    }
-                ],
-                "imageContext": {
-                    "languageHints": ["zh", "en"]
-                }
+                "image": {"content": image_base64},
+                "features": [{"type": "TEXT_DETECTION"}],
+                "imageContext": {"languageHints": ["zh", "en"]}
             }
         ]
     }
     
     try:
-        logger.info("调用 Google Vision API...")
-        logger.info(f"使用 Referer: {headers['Referer']}")
-        
+        logger.info("Calling Google Vision API...")
         response = requests.post(url, json=request_body, headers=headers, timeout=30)
-        
-        if response.status_code == 403:
-            logger.error("Vision API 403 错误 - 可能是 referer 限制")
-            # 尝试不带 referer 重试（如果 API 密钥设置为无限制）
-            headers_no_referer = {'Content-Type': 'application/json'}
-            response = requests.post(url, json=request_body, headers=headers_no_referer, timeout=30)
-        
         result = response.json()
         
         if response.status_code != 200:
-            error_msg = result.get('error', {}).get('message', '未知错误')
-            logger.error(f"Vision API 错误 ({response.status_code}): {error_msg}")
-            
-            # 特别处理 referer 错误
-            if "referer" in error_msg.lower():
-                return "OCR失败: 请在 Google Cloud Console 中设置 API 密钥的网站限制为允许 http://localhost:3000"
-            
-            return f"OCR失败: {error_msg}"
+            error_msg = result.get('error', {}).get('message', 'Unknown error')
+            return {"success": False, "error": error_msg, "text": ""}
         
         if 'responses' in result and result['responses'][0]:
             text_annotation = result['responses'][0].get('textAnnotations', [])
             if text_annotation:
                 extracted_text = text_annotation[0].get('description', '')
-                logger.info(f"OCR成功，识别到 {len(extracted_text)} 字符")
-                return extracted_text
+                return {"success": True, "text": extracted_text, "error": ""}
         
-        return "未在图片中检测到文字"
+        return {"success": True, "text": "", "error": "No text detected"}
     
     except Exception as e:
-        logger.error(f"OCR错误: {e}")
-        return f"OCR处理失败: {str(e)}"
+        return {"success": False, "error": str(e), "text": ""}
 
+# GEMINI FAKE NEWS DETECTION
 def detect_fake_news_with_gemini(text):
-    """使用 Gemini 检测假新闻"""
-    model_name = "models/gemini-2.5-flash"
+    """Use Gemini to detect fake news - Using gemini-2.5-flash model"""
+    # Use the correct model name from diagnostic (Tried many models but only 2.5 works, not sure my issue or what?)
+    model_name = "gemini-2.5-flash"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/{model_name}:generateContent?key={GEMINI_API_KEY}"
-    
-    prompt = f"""
-    你是一个专业的假新闻检测专家。请分析以下新闻文本，判断它是否是假新闻。
+    prompt = f"""You are a professional fake news detection expert. Analyze this news text and determine if it's fake or real.
 
-    新闻文本：
-    {text}
+News text: {text}
 
-    请以 JSON 格式返回结果，包含以下字段：
-    1. prediction: 只能是 "Fake" 或 "Not Fake"
-    2. explanation: 详细解释为什么这样判断（中文）
-    3. confidence: 置信度（0-100之间的数字）
-    4. key_points: 关键判断点列表（数组格式）
+Provide your analysis in this JSON format:
+{{
+    "prediction": "Fake" or "Not Fake",
+    "confidence": (0-100 number),
+    "explanation": "Detailed explanation in English",
+    "key_points": ["point1", "point2", "point3"]
+}}
 
-    只返回 JSON，不要有其他文字。
-    """
-    
+Only return the JSON, no other text."""
+
     payload = {
-        "contents": [
-            {
-                "parts": [
-                    {
-                        "text": prompt
-                    }
-                ]
-            }
-        ]
+        "contents": [{"parts": [{"text": prompt}]}]
     }
     
-    headers = {
-        'Content-Type': 'application/json'
-    }
+    headers = {'Content-Type': 'application/json'}
     
     try:
-        logger.info(f"调用 Gemini 模型: {model_name}")
+        logger.info(f"Calling Gemini API with model {model_name}...")
         response = requests.post(url, json=payload, headers=headers, timeout=30)
         
-        if response.status_code == 429:
-            logger.warning("Gemini 配额超限")
+        if response.status_code == 200:
+            result = response.json()
+            
+            if 'candidates' in result and len(result['candidates']) > 0:
+                text_response = result['candidates'][0]['content']['parts'][0]['text']
+                
+                # Extract JSON from response
+                try:
+                    # Find JSON in the response (it might be wrapped in markdown code blocks)
+                    if '```json' in text_response:
+                        text_response = text_response.split('```json')[1].split('```')[0]
+                    elif '```' in text_response:
+                        text_response = text_response.split('```')[1].split('```')[0]
+                    
+                    start = text_response.find('{')
+                    end = text_response.rfind('}') + 1
+                    if start != -1 and end > start:
+                        json_str = text_response[start:end]
+                        parsed = json.loads(json_str)
+                        return {
+                            "prediction": parsed.get("prediction", "Unknown"),
+                            "confidence": parsed.get("confidence", 0),
+                            "explanation": parsed.get("explanation", "No explanation provided"),
+                            "key_points": parsed.get("key_points", [])
+                        }
+                except json.JSONDecodeError as e:
+                    logger.error(f"JSON parsing error: {e}")
+                
+                # Fallback - return raw response
+                return {
+                    "prediction": "Unknown",
+                    "confidence": 0,
+                    "explanation": text_response[:500],
+                    "key_points": []
+                }
+        elif response.status_code == 429:
             return {
                 "prediction": "Unknown",
-                "explanation": "API 配额已超限，请稍后再试",
                 "confidence": 0,
-                "key_points": ["服务暂时不可用，请等待几分钟"]
+                "explanation": "API quota exceeded. Please try again later.",
+                "key_points": ["Quota exceeded"]
             }
-        
-        if response.status_code != 200:
-            logger.error(f"Gemini API 错误: {response.text}")
+        else:
+            logger.error(f"Gemini API error: {response.status_code} - {response.text}")
             return {
                 "prediction": "Error",
-                "explanation": f"API 调用失败: {response.status_code}",
                 "confidence": 0,
-                "key_points": []
+                "explanation": f"API Error: {response.status_code}",
+                "key_points": ["Please check the diagnostic endpoint"]
             }
-        
-        result = response.json()
-        
-        if 'candidates' in result and len(result['candidates']) > 0:
-            text_response = result['candidates'][0]['content']['parts'][0]['text']
-            
-            try:
-                start = text_response.find('{')
-                end = text_response.rfind('}') + 1
-                if start != -1 and end > start:
-                    json_str = text_response[start:end]
-                    parsed = json.loads(json_str)
-                    
-                    return {
-                        "prediction": parsed.get("prediction", "Unknown"),
-                        "explanation": parsed.get("explanation", "无法分析"),
-                        "confidence": parsed.get("confidence", 0),
-                        "key_points": parsed.get("key_points", [])
-                    }
-            except:
-                pass
-            
-            return {
-                "prediction": "Unknown",
-                "explanation": text_response[:500],
-                "confidence": 0,
-                "key_points": []
-            }
-        
+                
+    except Exception as e:
+        logger.error(f"Error with Gemini API: {e}")
         return {
             "prediction": "Error",
-            "explanation": "无法获取响应",
             "confidence": 0,
-            "key_points": []
+            "explanation": f"Error: {str(e)}",
+            "key_points": ["Connection error"]
+        }
+
+# GEMINI CLICKBAIT DETECTION
+def detect_clickbait_with_gemini(text):
+    """Use Gemini to detect clickbait - Using gemini-2.5-flash model"""
+    model_name = "gemini-2.5-flash"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
+    
+    prompt = f"""Analyze this headline/text for clickbait characteristics. Determine if it's clickbait and provide a score.
+
+Text: {text}
+
+Return in this JSON format:
+{{
+    "score": (0-100 number, where 100 is definitely clickbait),
+    "prediction": "Clickbait" or "Not Clickbait",
+    "confidence": (0-100 number),
+    "explanation": "Why it is or isn't clickbait",
+    "clickbait_elements": ["element1", "element2"]
+}}
+
+Only return JSON."""
+
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}]
+    }
+    
+    headers = {'Content-Type': 'application/json'}
+    
+    try:
+        logger.info(f"Calling Gemini API for clickbait with model {model_name}...")
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        
+        if response.status_code == 200:
+            result = response.json()
+            
+            if 'candidates' in result and len(result['candidates']) > 0:
+                text_response = result['candidates'][0]['content']['parts'][0]['text']
+                
+                try:
+                    # Extract JSON from response
+                    if '```json' in text_response:
+                        text_response = text_response.split('```json')[1].split('```')[0]
+                    elif '```' in text_response:
+                        text_response = text_response.split('```')[1].split('```')[0]
+                    
+                    start = text_response.find('{')
+                    end = text_response.rfind('}') + 1
+                    if start != -1 and end > start:
+                        json_str = text_response[start:end]
+                        parsed = json.loads(json_str)
+                        return {
+                            "score": parsed.get("score", 0),
+                            "prediction": parsed.get("prediction", "Unknown"),
+                            "confidence": parsed.get("confidence", 0),
+                            "explanation": parsed.get("explanation", ""),
+                            "clickbait_elements": parsed.get("clickbait_elements", [])
+                        }
+                except json.JSONDecodeError:
+                    pass
+                    
+        return {
+            "score": 0,
+            "prediction": "Unknown",
+            "confidence": 0,
+            "explanation": "Could not analyze clickbait",
+            "clickbait_elements": []
         }
         
     except Exception as e:
-        logger.error(f"Gemini 调用失败: {e}")
+        logger.error(f"Clickbait detection failed: {e}")
         return {
+            "score": 0,
             "prediction": "Error",
-            "explanation": f"AI 分析失败: {str(e)}",
             "confidence": 0,
-            "key_points": []
+            "explanation": str(e),
+            "clickbait_elements": []
         }
 
+# API ENDPOINTS
 @app.get("/")
 async def root():
     return {
-        "message": "假新闻检测 API",
+        "name": "ABANG KARIPAP API",
+        "version": "1.0.0",
+        "status": "running",
+        "model": "gemini-2.5-flash",
         "endpoints": [
             "/health",
-            "/detect_fake",
-            "/detect_fake_from_image",
-            "/test_google_ocr"
+            "/detect/text",
+            "/detect/image",
+            "/diagnose/gemini"
         ]
     }
 
@@ -219,106 +291,89 @@ async def root():
 async def health_check():
     return {
         "status": "healthy",
+        "model": "gemini-2.5-flash",
         "vision_api": "configured",
-        "gemini_api": "configured",
-        "message": "服务器正常运行"
+        "gemini_api": "configured"
     }
 
-@app.post("/detect_fake")
-async def detect_fake_news(news: TextNewsItem):
-    """处理文字输入"""
-    logger.info(f"收到文字检测请求")
+@app.post("/detect/text")
+async def detect_from_text(request: TextNewsRequest):
+    start_time = time.time()
     
-    if not news.text.strip():
-        return {
-            "input_type": "text",
-            "prediction": "Error",
-            "explanation": "请输入要检测的文本",
-            "confidence": 0,
-            "key_points": []
-        }
+    if not request.text.strip():
+        raise HTTPException(status_code=400, detail="Text cannot be empty")
     
-    result = detect_fake_news_with_gemini(news.text)
+    fake_news_result = detect_fake_news_with_gemini(request.text)
+    clickbait_result = detect_clickbait_with_gemini(request.text)
     
     return {
         "input_type": "text",
-        "original_text": news.text[:200] + "..." if len(news.text) > 200 else news.text,
-        "prediction": result["prediction"],
-        "explanation": result["explanation"],
-        "confidence": result["confidence"],
-        "key_points": result["key_points"]
+        "fake_news": fake_news_result,
+        "clickbait": clickbait_result,
+        "processing_time": round(time.time() - start_time, 2)
     }
 
-@app.post("/detect_fake_from_image")
-async def detect_fake_from_image(news: ImageNewsItem):
-    """处理图片输入"""
-    logger.info("收到图片检测请求")
+@app.post("/detect/image")
+async def detect_from_image(request: ImageNewsRequest):
+    start_time = time.time()
     
     try:
-        base64.b64decode(news.image)
+        base64.b64decode(request.image)
     except:
+        raise HTTPException(status_code=400, detail="Invalid image data")
+    
+    ocr_result = ocr_with_google_vision(request.image)
+    
+    if not ocr_result["success"]:
         return {
             "input_type": "image",
-            "prediction": "Error",
-            "explanation": "无效的图片数据",
-            "confidence": 0,
-            "key_points": []
+            "fake_news": {
+                "prediction": "Error",
+                "confidence": 0,
+                "explanation": f"OCR failed: {ocr_result['error']}",
+                "key_points": []
+            },
+            "clickbait": {
+                "score": 0,
+                "prediction": "Error",
+                "confidence": 0,
+                "explanation": "OCR failed",
+                "clickbait_elements": []
+            },
+            "ocr_text": "",
+            "processing_time": round(time.time() - start_time, 2)
         }
     
-    # OCR 识别
-    ocr_text = ocr_with_google_vision(news.image)
-    logger.info(f"OCR 结果: {ocr_text[:100]}...")
+    extracted_text = ocr_result["text"]
     
-    if ocr_text.startswith("OCR失败"):
+    if not extracted_text.strip():
         return {
             "input_type": "image",
-            "ocr_text": ocr_text,
-            "prediction": "Error",
-            "explanation": ocr_text,
-            "confidence": 0,
-            "key_points": []
+            "fake_news": {
+                "prediction": "Unknown",
+                "confidence": 0,
+                "explanation": "No text detected in image",
+                "key_points": []
+            },
+            "clickbait": {
+                "score": 0,
+                "prediction": "Unknown",
+                "confidence": 0,
+                "explanation": "No text detected",
+                "clickbait_elements": []
+            },
+            "ocr_text": "No text detected",
+            "processing_time": round(time.time() - start_time, 2)
         }
     
-    if ocr_text == "未在图片中检测到文字":
-        return {
-            "input_type": "image",
-            "ocr_text": ocr_text,
-            "prediction": "Unknown",
-            "explanation": "图片中未检测到文字，无法判断",
-            "confidence": 0,
-            "key_points": []
-        }
-    
-    # Gemini 检测
-    result = detect_fake_news_with_gemini(ocr_text)
+    fake_news_result = detect_fake_news_with_gemini(extracted_text)
+    clickbait_result = detect_clickbait_with_gemini(extracted_text)
     
     return {
         "input_type": "image",
-        "ocr_text": ocr_text[:500] + "..." if len(ocr_text) > 500 else ocr_text,
-        "ocr_length": len(ocr_text),
-        "prediction": result["prediction"],
-        "explanation": result["explanation"],
-        "confidence": result["confidence"],
-        "key_points": result["key_points"]
-    }
-
-@app.post("/test_google_ocr")
-async def test_google_ocr(news: ImageNewsItem):
-    """测试 OCR 功能"""
-    logger.info("测试 Google Vision OCR...")
-    
-    try:
-        base64.b64decode(news.image)
-    except:
-        return {
-            "success": False,
-            "error": "无效的图片数据"
-        }
-    
-    extracted_text = ocr_with_google_vision(news.image)
-    
-    return {
-        "success": not extracted_text.startswith("OCR失败"),
-        "ocr_result": extracted_text,
-        "length": len(extracted_text)
+        "fake_news": fake_news_result,
+        "clickbait": clickbait_result,
+        "ocr_text": extracted_text[:500] + "..." if len(extracted_text) > 500 else extracted_text,
+        "ocr_length": len(extracted_text),
+        "processing_time": round(time.time() - start_time, 2)
     }
