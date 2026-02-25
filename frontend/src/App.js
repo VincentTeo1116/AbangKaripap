@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import AuthModal from './components/AuthModal';
+import HistorySidebar from './components/HistorySidebar';
+import historyService from './services/historyService';
+import LogoutConfirmModal from './components/LogoutConfirmModal';
+import HistoryViewModal from './components/HistoryViewModal';
 
 function App() {
   const [inputType, setInputType] = useState('text');
@@ -8,16 +14,82 @@ function App() {
   const [imagePreview, setImagePreview] = useState(null);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('fake'); // 'fake' or 'clickbait'
+  const [activeTab, setActiveTab] = useState('fake');
   const [dragActive, setDragActive] = useState(false);
   const [language, setLanguage] = useState('en');
   const [backendStatus, setBackendStatus] = useState(null);
   const [ocrStatus, setOcrStatus] = useState('');
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const { user, logout } = useAuth();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [loadingFromHistory, setLoadingFromHistory] = useState(false);
+  const [lastSavedResult, setLastSavedResult] = useState(null);
+  const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
+  
 
   // Check backend status on load
   useEffect(() => {
     checkBackendStatus();
   }, []);
+
+  // Save to history when result comes in and user is logged in
+  useEffect(() => {
+    const saveToHistory = async () => {
+      // Don't save if:
+      // 1. No result
+      // 2. No user
+      // 3. Result has error
+      // 4. We're loading from history
+      if (!result || !user || result.error || loadingFromHistory) {
+        console.log('Not saving:', { 
+          hasResult: !!result, 
+          hasUser: !!user, 
+          hasError: result?.error,
+          loadingFromHistory 
+        });
+        return;
+      }
+      
+      // Create a simple hash of the result to check for duplicates
+      const resultHash = JSON.stringify({
+        input_type: result.input_type,
+        ocr_text: result.ocr_text,
+        fake_news: result.fake_news?.prediction,
+        clickbait: result.clickbait?.prediction
+      });
+      
+      // Don't save if this exact result was just saved
+      if (lastSavedResult === resultHash) {
+        console.log('Duplicate result, not saving');
+        return;
+      }
+      
+      // Clean the data before saving
+      const historyData = {
+        input_type: result.input_type || 'text',
+        news_text: newsText || '',
+        ocr_text: result.ocr_text || '',
+        fake_news: result.fake_news || null,
+        clickbait: result.clickbait || null,
+        timestamp: new Date().toISOString()
+      };
+      
+      // Remove any fields that are still undefined
+      Object.keys(historyData).forEach(key => {
+        if (historyData[key] === undefined) {
+          delete historyData[key];
+        }
+      });
+      
+      await historyService.saveToHistory(user.uid, historyData);
+      
+      // Update last saved hash
+      setLastSavedResult(resultHash);
+    };
+    
+    saveToHistory();
+  }, [result, user, newsText, loadingFromHistory, lastSavedResult]); // ← ADD lastSavedResult here
 
   const checkBackendStatus = async () => {
     try {
@@ -29,7 +101,6 @@ function App() {
     }
   };
 
-  // Language translations
   const translations = {
     en: {
       title: "ABANG KARIPAP",
@@ -63,10 +134,65 @@ function App() {
       clickbaitScore: "Clickbait Score",
       clickbaitElements: "Clickbait Elements",
       processingTime: "Processing Time",
-      seconds: "seconds",
+      seconds: "s",
       enterTextError: "Please enter text to analyze",
       selectImageError: "Please select an image",
       imageSizeError: "Image size cannot exceed 10MB",
+      login: "Login",
+      logout: "Logout",
+      history: "History",
+      welcome: "Welcome",
+      characters: "chars",
+      logoutConfirm: "Logout Confirmation",
+      logoutMessage: "Are you sure you want to logout?",
+      cancel: "Cancel",
+      confirm: "Logout",
+    },
+    ms: {
+      title: "ABANG KARIPAP",
+      subtitle: "Pemeriksa Fakta",
+      fakeNews: "Pengesan Berita Palsu",
+      clickbait: "Pengesanan Clickbait",
+      textInput: "Input Teks",
+      imageInput: "Input Imej",
+      textPlaceholder: "Tampal teks berita atau tajuk di sini...",
+      detectNews: "Kesan Berita Palsu",
+      detectClickbait: "Periksa Clickbait",
+      analyzing: "Menganalisis...",
+      processing: "Memproses...",
+      uploadMain: "Klik untuk muat naik atau seret dan lepas",
+      uploadHint: "Menyokong JPG, PNG, GIF (max 10MB)",
+      extractingText: "Mengekstrak teks dari imej...",
+      ocrCompleted: "OCR selesai",
+      ocrFailed: "OCR gagal",
+      detectionResult: "Keputusan Pengesanan",
+      image: "Imej",
+      text: "Teks",
+      ocrResult: "Teks dari Imej",
+      prediction: "Ramalan",
+      fakeNewsResult: "Berita Palsu",
+      realNews: "Berita Benar",
+      cannotDetermine: "Tidak Dapat Ditentukan",
+      systemError: "Ralat Sistem",
+      explanation: "Penjelasan",
+      keyPoints: "Perkara Utama",
+      confidence: "Keyakinan",
+      clickbaitScore: "Skor Clickbait",
+      clickbaitElements: "Elemen Clickbait",
+      processingTime: "Masa Pemprosesan",
+      seconds: "s",
+      enterTextError: "Sila masukkan teks untuk dianalisis",
+      selectImageError: "Sila pilih imej",
+      imageSizeError: "Saiz imej tidak boleh melebihi 10MB",
+      login: "Log Masuk",
+      logout: "Log Keluar",
+      history: "Sejarah",
+      welcome: "Selamat Datang",
+      characters: "aksara",
+      logoutConfirm: "Pengesahan Log Keluar",
+      logoutMessage: "Adakah anda pasti mahu log keluar?",
+      cancel: "Batal",
+      confirm: "Log Keluar",
     },
     zh: {
       title: "ABANG KARIPAP",
@@ -104,6 +230,15 @@ function App() {
       enterTextError: "请输入要分析的文本",
       selectImageError: "请选择图片",
       imageSizeError: "图片大小不能超过10MB",
+      login: "登录",
+      logout: "登出",
+      history: "历史记录",
+      welcome: "欢迎",
+      characters: "字符",
+      logoutConfirm: "退出确认",
+      logoutMessage: "您确定要退出登录吗？",
+      cancel: "取消",
+      confirm: "退出",
     }
   };
 
@@ -127,6 +262,16 @@ function App() {
     
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleImageSelect({ target: { files: [e.dataTransfer.files[0]] } });
+    }
+  };
+
+  const handleLogout = async () => {
+    const result = await logout();
+    if (result.success) {
+      setShowLogoutConfirm(false);
+      setShowHistory(false); // Close history sidebar if open
+      // Optional: Clear any user-specific data
+      setResult(null);
     }
   };
 
@@ -225,7 +370,7 @@ function App() {
       
       const data = await response.json();
       setResult(data);
-      setOcrStatus(data.fake_news?.prediction === 'Error' ? `${t.ocrFailed}` : `${t.ocrCompleted}`);
+      setOcrStatus(data.fake_news?.prediction === 'Error' ? `❌ ${t.ocrFailed}` : `✅ ${t.ocrCompleted}`);
     } catch (error) {
       setResult({ 
         error: true,
@@ -380,6 +525,67 @@ function App() {
     );
   };
 
+  // UPDATED: Header controls with new buttons
+  const renderHeaderControls = () => (
+    <div className="header-controls">
+      <div className={`backend-status ${backendStatus?.status === 'healthy' ? 'online' : 'offline'}`}>
+        <span className="status-dot"></span>
+        {backendStatus?.status === 'healthy' ? t.backendOnline : t.backendOffline}
+      </div>
+      
+      {user && (
+        <button 
+          className="history-toggle" 
+          onClick={() => setShowHistory(true)}
+          title={t.history}
+        >
+          <span className="btn-icon">📚</span>
+          <span className="history-text">{t.history}</span>
+        </button>
+      )}
+      
+      {!user ? (
+        <button 
+          className="login-toggle" 
+          onClick={() => setShowAuthModal(true)}
+        >
+          <span className="btn-icon">👤</span>
+          <span>{t.login}</span>
+        </button>
+      ) : (
+        <div className="user-menu-container">
+          <button 
+            className="user-menu"
+            title={user.email}
+          >
+            <span className="btn-icon">👤</span>
+            <span className="user-email">{user.email?.split('@')[0]}</span>
+          </button>
+          <button 
+            className="logout-button"
+            onClick={() => setShowLogoutConfirm(true)}
+            title={t.logout}
+          >
+            <span className="btn-icon">🚪</span>
+          </button>
+        </div>
+      )}
+      
+      <button 
+        className="language-toggle" 
+        onClick={() => {
+          if (language === 'en') setLanguage('ms');
+          else if (language === 'ms') setLanguage('zh');
+          else setLanguage('en');
+        }}
+      >
+        {language === 'en' && '🌐 MS'}
+        {language === 'ms' && '🌐 中'}
+        {language === 'zh' && '🌐 EN'}
+      </button>
+    </div>
+  );
+
   return (
     <div className="app">
       {/* Background decoration */}
@@ -401,16 +607,7 @@ function App() {
               </h1>
             </div>
             
-            <div className="header-controls">
-              <div className={`backend-status ${backendStatus?.status === 'healthy' ? 'online' : 'offline'}`}>
-                <span className="status-dot"></span>
-                {backendStatus?.status === 'healthy' ? t.backendOnline : t.backendOffline}
-              </div>
-              
-              <button className="language-toggle" onClick={() => setLanguage(lang => lang === 'en' ? 'zh' : 'en')}>
-                {language === 'en' ? '🌐 中' : '🌐 EN'}
-              </button>
-            </div>
+            {renderHeaderControls()}
           </div>
         </header>
 
@@ -567,7 +764,7 @@ function App() {
                   <span className="ocr-icon">📄</span>
                   <span className="ocr-title">{t.ocrResult}</span>
                   {result.ocr_length && (
-                    <span className="ocr-length">{result.ocr_length} {t.characters || 'chars'}</span>
+                    <span className="ocr-length">{result.ocr_length} {t.characters}</span>
                   )}
                 </div>
                 <div className="ocr-text">
@@ -601,8 +798,48 @@ function App() {
           <p className="copyright">Powered by Google Vision & Gemini AI</p>
         </footer>
       </div>
+
+      <LogoutConfirmModal 
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        onConfirm={handleLogout}
+        translations={translations[language]}
+      />
+      
+      <AuthModal 
+        isOpen={showAuthModal} 
+        onClose={() => setShowAuthModal(false)} 
+        language={language}
+        translations={translations[language]}
+      />
+      
+      <HistoryViewModal 
+        isOpen={!!selectedHistoryItem}
+        onClose={() => setSelectedHistoryItem(null)}
+        historyItem={selectedHistoryItem}
+        translations={translations[language]}
+      />
+
+      <HistorySidebar 
+        isOpen={showHistory} 
+        onClose={() => setShowHistory(false)}
+        onSelectHistory={(item) => {
+          // Just open the modal with the history item
+          setSelectedHistoryItem(item);
+          setShowHistory(false); // Close the sidebar
+        }}
+        language={language}
+        translations={translations[language]}
+      />
     </div>
   );
 }
 
-export default App;
+// NEW: Wrap App with AuthProvider
+const AppWithAuth = () => (
+  <AuthProvider>
+    <App />
+  </AuthProvider>
+);
+
+export default AppWithAuth;

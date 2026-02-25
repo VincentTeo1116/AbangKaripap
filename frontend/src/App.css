@@ -71,7 +71,7 @@ body {
 .container {
   position: relative;
   z-index: 1;
-  max-width: 900px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
@@ -1140,5 +1140,143 @@ body {
   
   .clickbait-elements .elements-list {
     justify-content: center;
+  }
+}
+
+/* Add to your existing App.css */
+
+/* History Toggle Button */
+.history-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 30px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(5px);
+}
+
+.history-toggle:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+.history-toggle .history-text {
+  display: inline;
+}
+
+/* Login Toggle Button */
+.login-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #fcbb08 0%, #ff8c42 100%);
+  border: none;
+  border-radius: 30px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(252, 187, 8, 0.3);
+}
+
+.login-toggle:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(252, 187, 8, 0.4);
+}
+
+/* User Menu Button */
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid #fcbb08;
+  border-radius: 30px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(5px);
+}
+
+.user-menu:hover {
+  background: rgba(252, 187, 8, 0.3);
+  transform: translateY(-2px);
+}
+
+.user-email {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .history-toggle .history-text,
+  .user-email {
+    display: none;
+  }
+  
+  .history-toggle,
+  .login-toggle,
+  .user-menu {
+    padding: 8px 12px;
+  }
+  
+  .header-controls {
+    gap: 8px;
+  }
+}
+
+/* Add to your App.css */
+.user-menu-container {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.logout-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid #fcbb08;
+  border-radius: 50%;
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(5px);
+  padding: 0;
+}
+
+.logout-button:hover {
+  background: rgba(252, 187, 8, 0.3);
+  transform: translateY(-2px);
+}
+
+@media (max-width: 768px) {
+  .user-menu-container {
+    gap: 3px;
+  }
+  
+  .logout-button {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
   }
 }
