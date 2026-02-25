@@ -23,7 +23,7 @@ function App() {
   const [showHistory, setShowHistory] = useState(false);
   const { user, logout } = useAuth();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [loadingFromHistory, setLoadingFromHistory] = useState(false);
+  const [loadingFromHistory] = useState(false);
   const [lastSavedResult, setLastSavedResult] = useState(null);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
   
@@ -812,7 +812,7 @@ function App() {
         language={language}
         translations={translations[language]}
       />
-      
+
       <HistoryViewModal 
         isOpen={!!selectedHistoryItem}
         onClose={() => setSelectedHistoryItem(null)}

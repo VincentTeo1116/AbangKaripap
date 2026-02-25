@@ -10,19 +10,22 @@ const HistorySidebar = ({ isOpen, onClose, onSelectHistory }) => {
   const { user } = useAuth();
 
   useEffect(() => {
+
+    const loadHistory = async () => {
+        setLoading(true);
+        const result = await historyService.getUserHistory(user.uid);
+        if (result.success) {
+        setHistory(result.history);
+        }
+        setLoading(false);
+    };
+
     if (user && isOpen) {
       loadHistory();
     }
   }, [user, isOpen]);
 
-  const loadHistory = async () => {
-    setLoading(true);
-    const result = await historyService.getUserHistory(user.uid);
-    if (result.success) {
-      setHistory(result.history);
-    }
-    setLoading(false);
-  };
+
 
   const formatDate = (timestamp) => {
     const date = new Date(timestamp);
