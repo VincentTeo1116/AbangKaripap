@@ -377,3 +377,83 @@ async def detect_from_image(request: ImageNewsRequest):
         "ocr_length": len(extracted_text),
         "processing_time": round(time.time() - start_time, 2)
     }
+
+# Add these new endpoints to your main.py
+@app.post("/detect/text/fakenews")
+async def detect_fake_news_from_text(request: TextNewsRequest):
+    start_time = time.time()
+    
+    if not request.text.strip():
+        raise HTTPException(status_code=400, detail="Text cannot be empty")
+    
+    fake_news_result = detect_fake_news_with_gemini(request.text)
+    
+    return {
+        "input_type": "text",
+        "fake_news": fake_news_result,
+        "processing_time": round(time.time() - start_time, 2)
+    }
+
+@app.post("/detect/text/clickbait")
+async def detect_clickbait_from_text(request: TextNewsRequest):
+    start_time = time.time()
+    
+    if not request.text.strip():
+        raise HTTPException(status_code=400, detail="Text cannot be empty")
+    
+    clickbait_result = detect_clickbait_with_gemini(request.text)
+    
+    return {
+        "input_type": "text",
+        "clickbait": clickbait_result,
+        "processing_time": round(time.time() - start_time, 2)
+    }
+
+@app.post("/detect/image/fakenews")
+async def detect_fake_news_from_image(request: ImageNewsRequest):
+    start_time = time.time()
+    
+    try:
+        base64.b64decode(request.image)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid image data")
+    
+    ocr_result = ocr_with_google_vision(request.image)
+    
+    if not ocr_result["success"]:
+        return {
+            "input_type": "image",
+            "fake_news": {
+                "prediction": "Error",
+                "confidence": 0,
+                "explanation": f"OCR failed: {ocr_result['error']}",
+                "key_points": []
+            },
+            "ocr_text": "",
+            "processing_time": round(time.time() - start_time, 2)
+        }
+    
+    extracted_text = ocr_result["text"]
+    
+    if not extracted_text.strip():
+        return {
+            "input_type": "image",
+            "fake_news": {
+                "prediction": "Unknown",
+                "confidence": 0,
+                "explanation": "No text detected in image",
+                "key_points": []
+            },
+            "ocr_text": "No text detected",
+            "processing_time": round(time.time() - start_time, 2)
+        }
+    
+    fake_news_result = detect_fake_news_with_gemini(extracted_text)
+    
+    return {
+        "input_type": "image",
+        "fake_news": fake_news_result,
+        "ocr_text": extracted_text[:500] + "..." if len(extracted_text) > 500 else extracted_text,
+        "ocr_length": len(extracted_text),
+        "processing_time": round(time.time() - start_time, 2)
+    }
