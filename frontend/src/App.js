@@ -26,6 +26,7 @@ function App() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [lastSavedResult, setLastSavedResult] = useState(null);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
+  const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
   
 
   // Check backend status on load
@@ -90,7 +91,7 @@ function App() {
 
   const checkBackendStatus = async () => {
     try {
-      const response = await fetch('http://localhost:8000/health');
+      const response = await fetch(`${API_BASE_URL}/health`);
       const data = await response.json();
       setBackendStatus(data);
     } catch (error) {
@@ -327,7 +328,7 @@ function App() {
       // Choose endpoint based on active tab
       const endpoint = activeTab === 'fake' ? 'detect/text/fakenews' : 'detect/text/clickbait';
       
-      const response = await fetch(`http://localhost:8000/${endpoint}`, {
+      const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: newsText }),
@@ -360,7 +361,7 @@ function App() {
     try {
       const base64Image = await getBase64(selectedImage);
       // For image, we always do fake news detection (since clickbait is usually text)
-      const response = await fetch('http://localhost:8000/detect/image/fakenews', {
+      const response = await fetch(`${API_BASE_URL}/detect/image/fakenews`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: base64Image }),
