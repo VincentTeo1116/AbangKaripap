@@ -110,19 +110,64 @@ def detect_fake_news_with_gemini(text):
     model_name = "gemini-2.5-flash"
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
     
-    prompt = f"""You are a professional fake news detection expert. Analyze this news text and determine if it's fake or real.
+    prompt = f"""You are a professional fact-checker and fake news detection expert with years of experience. Analyze this news text using a systematic verification framework.
 
-News text: {text}
+TEXT TO ANALYZE:
+"{text}"
 
-Provide your analysis in this JSON format:
+ANALYSIS FRAMEWORK (apply each step):
+
+1. SOURCE EVALUATION:
+   - Does the text cite specific, verifiable sources?
+   - Are there authoritative references (experts, institutions, studies)?
+   - Is there attribution for claims made?
+
+2. LANGUAGE ANALYSIS:
+   - Check for emotional manipulation (outrage, fear, sensationalism)
+   - Identify loaded language or exaggerated terms
+   - Look for absolute statements ("always," "never," "everyone")
+   - Detect clickbait patterns or hyperbolic phrasing
+
+3. FACTUAL CONSISTENCY:
+   - Are claims specific and verifiable?
+   - Does the text make impossible or highly unlikely claims?
+   - Are there internal contradictions?
+   - Is the timeline logical and consistent?
+
+4. CONTEXT ASSESSMENT:
+   - Does the text provide balanced information?
+   - Are there missing key details that would change interpretation?
+   - Is it presenting opinion as fact?
+   - Does it acknowledge complexity or nuance?
+
+5. RED FLAG IDENTIFICATION:
+   - Unsubstantiated conspiracy theories
+   - Misrepresentation of scientific consensus
+   - False equivalency or false balance
+   - Cherry-picked data or statistics
+   - Ad hominem attacks or straw man arguments
+
+Now, based on this systematic analysis, provide your verdict in the exact JSON format below. Be specific and reference actual content from the text in your explanation.
+
 {{
-    "prediction": "Fake" or "Not Fake",
-    "confidence": (0-100 number),
-    "explanation": "Detailed explanation in English",
-    "key_points": ["point1", "point2", "point3"]
+    "prediction": "Fake" or "Not Fake" or "Uncertain",
+    "confidence": (number 0-100, based on strength of evidence),
+    "explanation": "A comprehensive explanation that references specific elements from the text and explains why it's fake/real",
+    "key_points": [
+        "Specific concerning element or verification point 1",
+        "Specific concerning element or verification point 2", 
+        "Specific concerning element or verification point 3"
+    ]
 }}
 
-Only return the JSON, no other text."""
+Important guidelines:
+- Use "Uncertain" if the text lacks enough information for a definitive judgment
+- Base confidence on: clarity of evidence, presence of verifiable claims, and strength of red flags
+- In explanation, explicitly reference words/phrases from the text
+- For "Not Fake" predictions, highlight what makes it credible
+- For "Fake" predictions, explain exactly what makes it unreliable
+
+Return ONLY the JSON, no additional text."""
 
     payload = {
         "contents": [{"parts": [{"text": prompt}]}]
@@ -200,20 +245,62 @@ def detect_clickbait_with_gemini(text):
     model_name = "gemini-2.5-flash"
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
     
-    prompt = f"""Analyze this headline/text for clickbait characteristics. Determine if it's clickbait and provide a score.
+    prompt = f"""You are an expert in digital media analysis specializing in clickbait detection. Analyze this headline/text using a comprehensive clickbait assessment framework.
 
-Text: {text}
+TEXT TO ANALYZE:
+"{text}"
 
-Return in this JSON format:
+CLICKBAIT ASSESSMENT FRAMEWORK:
+
+1. EMOTIONAL MANIPULATION CHECK:
+   - Does it provoke strong emotions (shock, anger, curiosity)?
+   - Are there emotional trigger words (unbelievable, shocking, mind-blowing)?
+   - Does it exploit fear, outrage, or FOMO (fear of missing out)?
+
+2. INFORMATION-PROMISE GAP:
+   - Does it promise more information than it delivers?
+   - Are there vague but enticing claims?
+   - Is the headline misleading relative to what you'd expect?
+
+3. CURIOSITY EXPLOITATION:
+   - Does it create curiosity without satisfying it?
+   - Uses patterns like "X will make you Y" or "This is what happens when..."
+   - Numbered lists that seem arbitrary ("10 reasons why...")
+
+4. LINGUISTIC PATTERNS:
+   - All caps or excessive punctuation
+   - Superlatives and exaggerations ("the most," "ever," "in history")
+   - Direct address to reader ("you won't believe," "you need to see")
+   - Absolute statements ("everyone is talking about")
+
+5. MANIPULATIVE TECHNIQUES:
+   - Creating false urgency
+   - Using mystery without substance
+   - Exploiting social proof ("going viral," "everyone's sharing")
+   - Making extraordinary claims without evidence
+
+Now analyze the text and provide your assessment in the exact JSON format below. Be specific about what elements contribute to clickbait score.
+
 {{
-    "score": (0-100 number, where 100 is definitely clickbait),
+    "score": (0-100 number, where 0 = legitimate headline, 100 = extreme clickbait),
     "prediction": "Clickbait" or "Not Clickbait",
-    "confidence": (0-100 number),
-    "explanation": "Why it is or isn't clickbait",
-    "clickbait_elements": ["element1", "element2"]
+    "confidence": (0-100 number based on strength of indicators),
+    "explanation": "Detailed explanation referencing specific words/phrases that influenced the score",
+    "clickbait_elements": [
+        "Specific clickbait element identified 1 (quote the text)",
+        "Specific clickbait element identified 2 (quote the text)",
+        "Specific clickbait element identified 3 (quote the text)"
+    ]
 }}
 
-Only return JSON."""
+Guidelines:
+- Score 0-30: Legitimate, informative headline
+- Score 31-60: Mild clickbait tendencies
+- Score 61-100: Strong clickbait
+- In explanation, quote specific words/phrases that are problematic
+- Clickbait elements should be concrete, quoted examples from the text
+
+Return ONLY the JSON, no additional text."""
 
     payload = {
         "contents": [{"parts": [{"text": prompt}]}]

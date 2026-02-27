@@ -931,7 +931,7 @@ function App() {
                   </label>
                 ) : (
                   <div className="preview-container">
-                    <img src={"imagePreview"} alt="Preview" className="preview-image" />
+                    <img src={imagePreview} alt="Preview" className="preview-image" />
                     <button className="clear-image" onClick={clearImage}>×</button>
                   </div>
                 )}
