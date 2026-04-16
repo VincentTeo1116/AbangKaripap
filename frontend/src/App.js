@@ -26,7 +26,7 @@ function App() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [lastSavedResult, setLastSavedResult] = useState(null);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
-  const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+  const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'https://abangkaripap.onrender.com';
   
 
   // Check backend status on load
