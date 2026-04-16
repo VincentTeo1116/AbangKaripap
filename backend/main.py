@@ -21,7 +21,7 @@ app = FastAPI(title="Fake News Detector API", version="1.0.0")
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000","https://stepless-kobe-reprovable.ngrok-free.dev"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000","https://karipapfakenews.netlify.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
