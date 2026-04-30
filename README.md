@@ -1,11 +1,9 @@
 # 🔍 ABANG KARIPAP - AI-Powered Fake News Detector
 
-[Web Page Demo](https://karipapfakenews.netlify.app)
-[Backend Server](https://abang-karipap-api.onrender.com)
-
 **ABANG KARIPAP** is an intelligent, AI-powered fake news detection system designed to help users identify misinformation in both text and images. Named with a friendly, approachable identity, ABANG KARIPAP acts as your personal fact-checking companion in the battle against fake news.
 
 🔗 **Live Demo:** [https://karipapfakenews.netlify.app](https://karipapfakenews.netlify.app)
+🔗 **Backend Server Check:** [https://abang-karipap-api.onrender.com](https://abang-karipap-api.onrender.com)
 
 ---
 
@@ -47,10 +45,3 @@
 | **Netlify** | Frontend hosting |
 | **Render** | Backend API hosting |
 
----
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     OPTIONAL: SAVE TO HISTORY (Firebase)                │
-│                                                                         │
-│   If user is logged in, the detection result is automatically saved     │
-│   to Firestore with timestamp, allowing users to revisit past checks.   │
-└─────────────────────────────────────────────────────────────────────────┘
