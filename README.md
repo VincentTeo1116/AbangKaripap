@@ -3,7 +3,10 @@
 **ABANG KARIPAP** is an intelligent, AI-powered fake news detection system designed to help users identify misinformation in both text and images. Named with a friendly, approachable identity, ABANG KARIPAP acts as your personal fact-checking companion in the battle against fake news.
 
 🔗 **Live Demo:** [https://karipapfakenews.netlify.app](https://karipapfakenews.netlify.app)
-🔗 **Backend Server Check:** [https://abang-karipap-api.onrender.com](https://abang-karipap-api.onrender.com)
+
+---
+
+🔗 **Backend Server Check:** [https://abangkaripapapi.onrender.com](https://abangkaripapapi.onrender.com)
 
 ---
 
